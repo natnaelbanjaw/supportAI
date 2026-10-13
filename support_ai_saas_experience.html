@@ -554,15 +554,23 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        console.error("Gemini API Error Response:", errText);
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
                     const result = await response.json();
                     const candidate = result.candidates?.[0];
                     if (candidate && candidate.content?.parts?.[0]?.text) {
                         return candidate.content.parts[0].text;
                     } else {
+                        console.error("Unexpected Gemini API structure:", result);
                         throw new Error("Invalid response structure from Gemini API");
                     }
                 } catch (err) {
+                    console.warn(`Gemini API Attempt ${attempt + 1} failed:`, err);
                     if (attempt === 3) throw err;
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2;
@@ -592,7 +600,8 @@
                 const analysisResult = await callGeminiAPI(systemPrompt, prompt);
                 companyData.geminiSummary = analysisResult;
             } catch (err) {
-                companyData.geminiSummary = `[OK] Company: ${companyData.name}\n[OK] Tone: ${companyData.tone}\n[OK] Knowledge Base successfully synchronized via Gemini API.`;
+                console.error("Analysis Failed:", err);
+                companyData.geminiSummary = `⚠️ **AI Analysis failed to connect.**\n\n[Fallback Data Generated]\n* Company: ${companyData.name}\n* Tone: ${companyData.tone}\n\nBasic knowledge base synchronized successfully.`;
             }
 
             setTimeout(() => {
@@ -624,8 +633,8 @@
                 document.getElementById('dash-welcome-msg').innerText = `Hello! I am your Gemini-powered AI assistant trained on ${companyData.name} data (${companyData.tone}). How can I help?`;
                 
                 document.getElementById('dash-summary-content').innerHTML = `
-                    <p class="text-indigo-400 font-semibold">[Gemini Synthesized Analysis]:</p>
-                    <p class="whitespace-pre-wrap">${escapeHtml(companyData.geminiSummary || 'Custom vector knowledge base indexed successfully.')}</p>
+                    <p class="text-indigo-400 font-semibold mb-2">[Gemini Synthesized Analysis]:</p>
+                    <div class="whitespace-pre-wrap text-sm leading-relaxed">${formatAIResponse(companyData.geminiSummary || '')}</div>
                 `;
             }
         }
@@ -637,8 +646,7 @@
             const msg = input.value.trim();
             if (!msg) return;
             const container = document.getElementById('hero-chat-messages');
-            container.innerHTML += `<div class="flex items-start justify-end space-x-3"><div class="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none max-w-[85%]"
-            >${escapeHtml(msg)}</div></div>`;
+            container.innerHTML += `<div class="flex items-start justify-end space-x-3"><div class="bg-indigo-600 text-white p-3 rounded-2xl rounded-tr-none max-w-[85%]">${escapeHtml(msg)}</div></div>`;
             input.value = '';
             container.scrollTop = container.scrollHeight;
 
@@ -655,10 +663,10 @@
                 chatHistories.hero.push({ role: "model", parts: [{ text: reply }] });
 
                 document.getElementById(typingId).remove();
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">${escapeHtml(reply)}</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%] whitespace-pre-wrap leading-relaxed">${formatAIResponse(reply)}</div></div>`;
             } catch (err) {
                 document.getElementById(typingId).remove();
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">Support AI is ready to help you resolve 80% of your tickets instantly!</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-red-500/20 flex-shrink-0 flex items-center justify-center text-red-500 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="bg-red-500/10 border border-red-500/20 p-3 rounded-2xl rounded-tl-none text-red-400 text-xs">Connection error. Please try again.</div></div>`;
             }
             container.scrollTop = container.scrollHeight;
         }
@@ -685,10 +693,10 @@
                 chatHistories.sandbox.push({ role: "model", parts: [{ text: reply }] });
 
                 document.getElementById(typingId).remove();
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-8 h-8 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">${escapeHtml(reply)}</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-8 h-8 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%] whitespace-pre-wrap leading-relaxed">${formatAIResponse(reply)}</div></div>`;
             } catch (err) {
                 document.getElementById(typingId).remove();
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-8 h-8 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">This query is processed with 99.4% vector accuracy using Gemini API.</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-8 h-8 rounded-full bg-red-500/20 flex-shrink-0 flex items-center justify-center text-red-500 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl rounded-tl-none text-red-400 text-xs">Error communicating with Gemini API.</div></div>`;
             }
             container.scrollTop = container.scrollHeight;
         }
@@ -715,11 +723,10 @@
                 chatHistories.dash.push({ role: "model", parts: [{ text: reply }] });
 
                 document.getElementById(typingId).remove();
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">${escapeHtml(reply)}</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%] whitespace-pre-wrap leading-relaxed">${formatAIResponse(reply)}</div></div>`;
             } catch (err) {
                 document.getElementById(typingId).remove();
-                const fallback = `As the AI support agent for ${companyData.name}, I can help you with your inquiry according to our ${companyData.tone.toLowerCase()} guidelines.`;
-                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">AI</div><div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl rounded-tl-none text-slate-200 max-w-[85%]">${fallback}</div></div>`;
+                container.innerHTML += `<div class="flex items-start space-x-3"><div class="w-7 h-7 rounded-full bg-red-500/20 flex-shrink-0 flex items-center justify-center text-red-500 text-xs font-bold"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="bg-red-500/10 border border-red-500/20 p-3.5 rounded-2xl rounded-tl-none text-red-400 text-xs">Failed to fetch agent response. Please check connection.</div></div>`;
             }
             container.scrollTop = container.scrollHeight;
         }
@@ -727,6 +734,19 @@
         function escapeHtml(text) {
             const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
             return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        function formatAIResponse(text) {
+            let safeText = escapeHtml(text);
+            // Bold tags **text**
+            safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>');
+            // Italic tags *text*
+            safeText = safeText.replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>');
+            // Code blocks ```code```
+            safeText = safeText.replace(/```([\s\S]*?)```/g, '<pre class="bg-slate-950/80 border border-slate-700/50 p-3 rounded-lg my-2 overflow-x-auto text-xs text-slate-300 font-mono"><code>$1</code></pre>');
+            // Inline code `code`
+            safeText = safeText.replace(/`([^`]+)`/g, '<code class="bg-slate-800 px-1.5 py-0.5 rounded text-xs text-indigo-300 font-mono">$1</code>');
+            return safeText;
         }
     </script>
 </body>
